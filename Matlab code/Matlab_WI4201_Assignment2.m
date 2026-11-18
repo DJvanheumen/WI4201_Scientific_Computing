@@ -624,7 +624,7 @@ function [index_set,A_loc,CT_loc,R_loc] = setup_AS_function(Ah,N,p_AS,l_AS)
 end
 % end setup AS function
 
-% star AS-PCG FUNCTION
+% start AS-PCG function
 function [u,k,res_vec] = PCG_AS_function(Ah,R_loc,CT_loc,p_AS,fh,u0,tol,maxit)
 
     % initialization
@@ -675,8 +675,9 @@ function [u,k,res_vec] = PCG_AS_function(Ah,R_loc,CT_loc,p_AS,fh,u0,tol,maxit)
     res_vec = res_vec(1:k+1);
 
 end
+% end AS-PCG function 
 
-% Additive Schwarz function
+% start Additive Schwarz function
 function z = Additive_Schwarz_function(r,R_loc,CT_loc,p_AS)
 
     % initialization
