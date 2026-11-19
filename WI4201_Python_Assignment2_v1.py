@@ -135,7 +135,6 @@ def SSOR_function(Ah, M1, M2, N1, N2, fh, u0, tol, maxit):
 
     return u, k, np.array(relres_vec)
 
-
 # ============================================================
 # CG FUNCTION
 # ============================================================
@@ -190,7 +189,6 @@ def CG_function(Ah, fh, u0, tol, maxit):
 
     return u, k, res_vec
 
-
 # ============================================================
 # SSOR-PCG FUNCTION
 # ============================================================
@@ -200,20 +198,14 @@ def PCG_SSOR_function(Ah, D, M1, M2, fh, u0, tol, maxit, omega):
     # initialization
     u = u0.copy()
     r = fh - Ah @ u
-
     rel_res = np.linalg.norm(r) / np.linalg.norm(fh)
-
     res_vec = np.zeros(maxit + 1)
     res_vec[0] = rel_res
 
     # factorize matrices once
     M1_solver = spla.splu(M1.tocsc())
     M2_solver = spla.splu(M2.tocsc())
-
-    z = omega * (2-omega) * M2_solver.solve(
-        D @ M1_solver.solve(r)
-    )
-
+    z = omega * (2-omega) * M2_solver.solve(D @ M1_solver.solve(r))
     p = z.copy()
     rTz_old = r @ z
 
@@ -226,7 +218,6 @@ def PCG_SSOR_function(Ah, D, M1, M2, fh, u0, tol, maxit, omega):
         rel_res = np.linalg.norm(r) / np.linalg.norm(fh)
         res_vec[1] = rel_res
         k = 1
-
     else:
         k = 0
 
@@ -311,7 +302,6 @@ def Additive_Schwarz_function(r, R_loc, CT_loc, p_AS):
 
     return np.asarray(z).ravel()
 
-
 # ============================================================
 # AS-PCG FUNCTION
 # ============================================================
@@ -348,19 +338,14 @@ def PCG_AS_function(Ah, R_loc, CT_loc, p_AS, fh, u0, tol, maxit):
 
         # updates
         z = Additive_Schwarz_function(r, R_loc, CT_loc, p_AS)
-
         rTz_new = r @ z
         beta = rTz_new / rTz_old
-
         p = z + beta * p
         rTz_old = rTz_new
-
         Ap = Ah @ p
         alpha = rTz_old / (p @ Ap)
-
         u = u + alpha * p
         r = r - alpha * Ap
-
         rel_res = np.linalg.norm(r) / np.linalg.norm(fh)
         res_vec[k] = rel_res
 
@@ -381,13 +366,21 @@ def PCG_AS_function(Ah, R_loc, CT_loc, p_AS, fh, u0, tol, maxit):
 plt.close('all')
 
 # set chapters
-chapters = [True, True, True, True]
+chapters = [True, True, True]
 
 # global parameter setting
 tol = 1e-10
-maxit = 20000
+maxit = 10000
 omega = 1.5
 Nruns_CPUtimes = 1
+
+# scenarios
+q_scenarios = np.arange(2, 9) # q values in chapter 1
+#N_scenarios = np.array([10, 20, 30, 40, 50])# N values in chapter 2
+N_scenarios = np.array([20, 40, 60, 80])# N values in chapter 2
+p_scenarios = [2, 4, 8, 10] # p values in chapter 3
+l_scenarios = [1, 2, 4, 8] # l values in chapter 3
+# l_scenarios = [0]  # scenarios without overlap in chapter 3 - takes relatively long as it does not converge
 
 # ============================================================
 # START CHAPTER 1: DISCRETIZATION
@@ -396,9 +389,6 @@ Nruns_CPUtimes = 1
 if chapters[0] == True:
     print("\n")
     print("1. Discretization")
-
-    # set scenarios
-    q_scenarios = np.arange(2, 9)
 
     # initialization
     error_scenarios = np.zeros(len(q_scenarios))
@@ -446,25 +436,32 @@ if chapters[0] == True:
 # ============================================================
 
 # ============================================================
-# START CHAPTER 2: SSOR
+# START CHAPTER 2: SSOR, CG AND SSOR-PCG
 # ============================================================
 
 if chapters[1] == True:
     print("\n")
-    print("2. SSOR")
+    print("2. SSOR, CG AND SSOR-PCG")
 
-    # number of iterations for asymptotic analysis
-    Nasympt = 5
-
-    # create scenarios
-    N_scenarios = np.array([40, 80, 120, 160, 200])
+    # compute n
     n_scenarios = (N_scenarios+1)**2
 
-    # initialization
-    relres_hist = [None] * len(N_scenarios)
+    # SSOR: preprocessing
+    Nasympt = 5 # number of iterations for asymptotic analysis
     alpha_mat = np.zeros((len(N_scenarios), Nasympt))
+    relres_hist = [None] * len(N_scenarios)
     CPUtimes_SSOR = np.zeros(len(N_scenarios))
     NumberIterations_SSOR = np.zeros(len(N_scenarios), dtype=int)
+
+    # CG: preprocessing
+    relres_CG_hist = [None] * len(N_scenarios)
+    CPUtimes_CG = np.zeros(len(N_scenarios))
+    NumberIterations_CG = np.zeros(len(N_scenarios), dtype=int)
+
+    # SSOR-PCG: preprocessing
+    relres_PCG_hist = [None] * len(N_scenarios)
+    CPUtimes_PCG = np.zeros(len(N_scenarios))
+    NumberIterations_PCG = np.zeros(len(N_scenarios), dtype=int)
 
     # loop over scenarios
     for nl in range(len(N_scenarios)):
@@ -476,9 +473,9 @@ if chapters[1] == True:
         h, n, u_ref, fh, Ah, u0 = discretization_function(N)
 
         # Gauss-Seidel matrix splitting
-        _, _, _, M1, M2, N1, N2 = GaussSeidelSplitting_function(Ah, n, omega)
+        D, _, _, M1, M2, N1, N2 = GaussSeidelSplitting_function(Ah, n, omega)
 
-        # SSOR iterations
+        # SSOR: iterations
         times = np.zeros(Nruns_CPUtimes)
         for rl in range(Nruns_CPUtimes):
             tic = time.perf_counter()
@@ -488,10 +485,31 @@ if chapters[1] == True:
         NumberIterations_SSOR[nl] = k
         relres_hist[nl] = relres_vec
 
-    # plot convergence history
-    plt.figure()
-    colors = ['r', 'b', 'g', 'm', 'c']
+        # CG: iterations
+        times = np.zeros(Nruns_CPUtimes)
+        for rl in range(Nruns_CPUtimes):
+            tic = time.perf_counter()
+            u_CG, k_CG, res_vec_CG = CG_function(Ah, fh, u0, tol, maxit)
+            times[rl] = time.perf_counter() - tic
+        CPUtimes_CG[nl] = np.median(times)
+        NumberIterations_CG[nl] = k_CG
+        u_CG = u_CG.reshape((N+1, N+1), order='F')
+        relres_CG_hist[nl] = res_vec_CG
 
+        # SSOR-CG: iterations
+        times = np.zeros(Nruns_CPUtimes)
+        for rl in range(Nruns_CPUtimes):
+            tic = time.perf_counter()
+            u_PCG, k_PCG, res_vec_PCG = PCG_SSOR_function(Ah, D, M1, M2, fh, u0, tol, maxit, omega)
+            times[rl] = time.perf_counter() - tic
+        CPUtimes_PCG[nl] = np.median(times)
+        NumberIterations_PCG[nl] = k_PCG
+        u_PCG = u_PCG.reshape((N+1, N+1), order='F')
+        relres_PCG_hist[nl] = res_vec_PCG
+
+    # SSOR: plot convergence history
+    plt.figure()
+    colors = ['r', 'b', 'g', 'm']
     for nl in range(len(N_scenarios)):
         plt.semilogy(np.arange(1, len(relres_hist[nl])+1),relres_hist[nl],color=colors[nl],linewidth=2,label=f'n = {n_scenarios[nl]}')
     plt.xlabel('Iteration number', fontsize=28)
@@ -504,31 +522,25 @@ if chapters[1] == True:
     plt.axhline(tol, color='k', linestyle='--', linewidth=2)
     plt.legend(fontsize=20, loc='best')
 
-    # compute residual ratios for asymptotic convergence
+    # SSOR: compute residual ratios for asymptotic convergence
     for il in range(len(n_scenarios)):
         for jl in range(Nasympt):
             alpha_mat[il, jl] = (relres_hist[il][-jl-1] / relres_hist[il][-jl-2])
 
-    # plot number of iterations and CPU times
+    # SSOR: number of iterations and CPU times
     plt.figure()
-
-    plt.subplot(2, 1, 1)
-    
+    plt.subplot(2, 1, 1)  
     xdat1 = n_scenarios
     ydat1 = NumberIterations_SSOR
-
     plt.plot(xdat1, ydat1, 'o-', linewidth=2, markersize=10, markerfacecolor='k', color='k' )
     plt.xlabel('n', fontsize=16)
     plt.ylabel('# SSOR iterations', fontsize=16)
     plt.xlim([0, xdat1[-1]*1.05])
     plt.ylim([0, max(1, ydat1[-1]*1.1)])
     plt.grid(True)
-    
     plt.subplot(2, 1, 2)
-
     xdat2 = n_scenarios**2
     ydat2 = CPUtimes_SSOR
-
     plt.plot(xdat2, ydat2, 'o-', linewidth=2, markersize=10, markerfacecolor='k', color='k')
     plt.xlabel('n^2', fontsize=16)
     plt.ylabel('SSOR CPU time (s)', fontsize=16)
@@ -536,94 +548,19 @@ if chapters[1] == True:
     plt.ylim([0, max(1e-12, ydat2[-1]*1.1)])
     plt.grid(True)
 
-    # print output
+    # SSOR: print output
     print("\nalpha_mat:")
     print(alpha_mat)
-
     print("\nNumberIterations_SSOR:")
     print(NumberIterations_SSOR)
-
     print("\nCPUtimes_SSOR:")
     print(CPUtimes_SSOR)
 
-
-# ============================================================
-# END CHAPTER 2: SSOR
-# ============================================================
-
-
-# ============================================================
-# START CHAPTER 3: CG AND SSOR-PCG
-# ============================================================
-
-if chapters[2] == True:
-    print("\n")
-    print("3. CG AND SSOR-PCG")
-
-    # create scenarios
-    N_scenarios = np.array([40, 80, 120, 160, 200])
-    n_scenarios = (N_scenarios+1)**2
-
-    # initialization
-    relres_CG_hist = [None] * len(N_scenarios)
-    relres_PCG_hist = [None] * len(N_scenarios)
-
-    CPUtimes_CG = np.zeros(len(N_scenarios))
-    NumberIterations_CG = np.zeros(len(N_scenarios), dtype=int)
-
-    CPUtimes_PCG = np.zeros(len(N_scenarios))
-    NumberIterations_PCG = np.zeros(len(N_scenarios), dtype=int)
-
-    # loop over scenarios
-    for nl in range(len(N_scenarios)):
-
-        # parameter settings
-        N = N_scenarios[nl]
-
-        # discretization
-        h, n, u_ref, fh, Ah, u0 = discretization_function(N)
-
-        # Gauss-Seidel matrix splitting
-        D, _, _, M1, M2, N1, N2 = GaussSeidelSplitting_function(Ah, n, omega)
-
-        # apply CG without preconditioning
-        times = np.zeros(Nruns_CPUtimes)
-
-        for rl in range(Nruns_CPUtimes):
-            tic = time.perf_counter()
-            u_CG, k_CG, res_vec_CG = CG_function(Ah, fh, u0, tol, maxit)
-            times[rl] = time.perf_counter() - tic
-
-        CPUtimes_CG[nl] = np.median(times)
-        NumberIterations_CG[nl] = k_CG
-
-        u_CG = u_CG.reshape((N+1, N+1), order='F')
-
-        # apply CG with SSOR preconditioning
-        times = np.zeros(Nruns_CPUtimes)
-
-        for rl in range(Nruns_CPUtimes):
-            tic = time.perf_counter()
-            u_PCG, k_PCG, res_vec_PCG = PCG_SSOR_function(Ah, D, M1, M2, fh, u0, tol, maxit, omega)
-            times[rl] = time.perf_counter() - tic
-
-        CPUtimes_PCG[nl] = np.median(times)
-        NumberIterations_PCG[nl] = k_PCG
-
-        u_PCG = u_PCG.reshape((N+1, N+1), order='F')
-
-        # store residuals
-        relres_CG_hist[nl] = res_vec_CG
-        relres_PCG_hist[nl] = res_vec_PCG
-
-    # plot CG convergence history
+    # CG: plot convergence history
     plt.figure()
-
-    colors = ['r', 'b', 'g', 'm', 'c', 'y']
-
+    colors = ['r', 'b', 'g', 'm', 'y']
     for nl in range(len(N_scenarios)):
         plt.semilogy(np.arange(len(relres_CG_hist[nl])),relres_CG_hist[nl],color=colors[nl],linewidth=2,label=f'n = {n_scenarios[nl]}')
-
     plt.xlabel('Iteration number', fontsize=28)
     plt.ylabel('Relative residual', fontsize=28)
     plt.xticks(fontsize=18)
@@ -634,12 +571,37 @@ if chapters[2] == True:
     plt.axhline(tol, color='k', linestyle='--', linewidth=2)
     plt.legend(fontsize=20, loc='upper right')
 
-    # plot PCG convergence history
+    # CG: plot number of iterations
     plt.figure()
+    plt.subplot(2, 1, 1)
+    xdat1 = np.sqrt(n_scenarios) * np.log(n_scenarios)
+    ydat1 = NumberIterations_CG
+    plt.plot(xdat1, ydat1, 'o-',linewidth=2, markersize=10,markerfacecolor='k', color='k')
+    plt.xlabel('n^(1/2) log(n)', fontsize=16)
+    plt.ylabel('# CG iterations', fontsize=16)
+    plt.xlim([0, xdat1[-1]*1.05])
+    plt.ylim([0, max(1, ydat1[-1]*1.1)])
+    plt.grid(True)
+    plt.subplot(2, 1, 2)
+    xdat2 = n_scenarios**(3/2) * np.log(n_scenarios)
+    ydat2 = CPUtimes_CG
+    plt.plot(xdat2, ydat2, 'o-',linewidth=2, markersize=10,markerfacecolor='k', color='k')
+    plt.xlabel('n^(3/2) log(n)', fontsize=16)
+    plt.ylabel('CG CPU time (s)', fontsize=16)
+    plt.xlim([0, xdat2[-1]*1.05])
+    plt.ylim([0, max(1e-12, ydat2[-1]*1.1)])
+    plt.grid(True)
 
+    # CG: print output
+    print("\nNumberIterations_CG:")
+    print(NumberIterations_CG)
+    print("\nCPUtimes_CG:")
+    print(CPUtimes_CG)
+
+    # SSOR-PCG: plot convergence history
+    plt.figure()
     for nl in range(len(N_scenarios)):
         plt.semilogy(np.arange(len(relres_PCG_hist[nl])),relres_PCG_hist[nl],color=colors[nl],linewidth=2,label=f'n = {n_scenarios[nl]}')
-
     plt.xlabel('Iteration number', fontsize=28)
     plt.ylabel('Relative residual', fontsize=28)
     plt.xticks(fontsize=18)
@@ -650,108 +612,75 @@ if chapters[2] == True:
     plt.axhline(tol, color='k', linestyle='--', linewidth=2)
     plt.legend(fontsize=20, loc='upper right')
 
-    # plot number of iterations and computation time for CG
+    # SSOR-PCG: plot number of iterations and computation time
     plt.figure()
-
     plt.subplot(2, 1, 1)
-
     xdat1 = np.sqrt(n_scenarios) * np.log(n_scenarios)
     ydat1 = NumberIterations_CG
-
     plt.plot(xdat1, ydat1, 'o-',linewidth=2, markersize=10,markerfacecolor='k', color='k')
-
     plt.xlabel('n^(1/2) log(n)', fontsize=16)
     plt.ylabel('# CG iterations', fontsize=16)
     plt.xlim([0, xdat1[-1]*1.05])
     plt.ylim([0, max(1, ydat1[-1]*1.1)])
     plt.grid(True)
-
     plt.subplot(2, 1, 2)
-
     xdat2 = n_scenarios**(3/2) * np.log(n_scenarios)
     ydat2 = CPUtimes_CG
-
     plt.plot(xdat2, ydat2, 'o-',linewidth=2, markersize=10,markerfacecolor='k', color='k')
-
     plt.xlabel('n^(3/2) log(n)', fontsize=16)
     plt.ylabel('CG CPU time (s)', fontsize=16)
     plt.xlim([0, xdat2[-1]*1.05])
     plt.ylim([0, max(1e-12, ydat2[-1]*1.1)])
     plt.grid(True)
 
-    # plot number of iterations and computation time for PCG
+    # SSOR-PCG: plot number of iterations and computation time
     plt.figure()
-
     plt.subplot(2, 1, 1)
-
     xdat1 = np.sqrt(n_scenarios) * np.log(n_scenarios)
     ydat1 = NumberIterations_PCG
-
     plt.plot(xdat1, ydat1, 'o-',linewidth=2, markersize=10,markerfacecolor='k', color='k')
-
     plt.xlabel('n^(1/2) log(n)', fontsize=16)
     plt.ylabel('# SSOR-PCG iterations', fontsize=16)
     plt.xlim([0, xdat1[-1]*1.05])
     plt.ylim([0, max(1, ydat1[-1]*1.1)])
     plt.grid(True)
-
     plt.subplot(2, 1, 2)
-
     xdat2 = n_scenarios**(3/2) * np.log(n_scenarios)
     ydat2 = CPUtimes_PCG
-
     plt.plot(xdat2, ydat2, 'o-', linewidth=2, markersize=10, markerfacecolor='k', color='k')
-
     plt.xlabel('n^(3/2) log(n)', fontsize=16)
     plt.ylabel('SSOR-PCG CPU time (s)', fontsize=16)
     plt.xlim([0, xdat2[-1]*1.05])
     plt.ylim([0, max(1e-12, ydat2[-1]*1.1)])
     plt.grid(True)
 
-    # print output
-    print("\nNumberIterations_CG:")
-    print(NumberIterations_CG)
-
-    print("\nCPUtimes_CG:")
-    print(CPUtimes_CG)
-
+    # SSOR-PCG: print output
     print("\nNumberIterations_PCG:")
     print(NumberIterations_PCG)
-
     print("\nCPUtimes_PCG:")
     print(CPUtimes_PCG)
 
-
 # ============================================================
-# END CHAPTER 3: CG AND SSOR-PCG
-# ============================================================
-
-
-# ============================================================
-# START CHAPTER 4: AS-PCG
+# END CHAPTER 2: SSOR, CG AND SSOR-PCG
 # ============================================================
 
-if chapters[3] == True:
+# ============================================================
+# START CHAPTER 3: AS-PCG
+# ============================================================
+
+if chapters[2] == True:
     print("\n")
-    print("4. AS-PCG")
+    print("3. AS-PCG")
 
-    # parameter setting
-    N = 200
+    # setting N
+    N = N_scenarios[-1]
 
     # discretization
     h, n, u_ref, fh, Ah, u0 = discretization_function(N)
 
-    # create scenarios
-    p_scenarios = [2, 4, 8, 10, 20]
-    l_scenarios = [1, 2, 4, 10]
-
-    # l_scenarios = [0]  # scenarios without overlap
-
     # initialization
     CPUtimes_AS_phase1 = np.zeros((len(p_scenarios), len(l_scenarios)))
-
     CPUtimes_AS_phase2 = np.zeros((len(p_scenarios), len(l_scenarios)))
-
     NumberIterations_AS = np.zeros((len(p_scenarios), len(l_scenarios)),dtype=int)
 
     # loop over scenarios
@@ -764,49 +693,36 @@ if chapters[3] == True:
 
             # set-up phase
             times = np.zeros(Nruns_CPUtimes)
-
             for rl in range(Nruns_CPUtimes):
-
                 tic = time.perf_counter()
-
                 index_set, A_loc, CT_loc, R_loc = setup_AS_function(Ah, N, p_AS, l_AS)
-
                 times[rl] = time.perf_counter() - tic
-
             CPUtimes_AS_phase1[pl, ll] = np.median(times)
 
             # AS-PCG algorithm
             times = np.zeros(Nruns_CPUtimes)
-
             for rl in range(Nruns_CPUtimes):
-
                 tic = time.perf_counter()
-
                 u_AS, k_AS, res_vec_AS = PCG_AS_function(Ah, R_loc, CT_loc, p_AS, fh, u0, tol, maxit)
-
                 times[rl] = time.perf_counter() - tic
-
             CPUtimes_AS_phase2[pl, ll] = np.median(times)
             NumberIterations_AS[pl, ll] = k_AS
 
     # print output
     print("\nNumberIterations_AS:")
     print(NumberIterations_AS)
-
     print("\nCPUtimes_AS_phase1:")
     print(CPUtimes_AS_phase1)
-
     print("\nCPUtimes_AS_phase2:")
     print(CPUtimes_AS_phase2)
 
-
 # ============================================================
-# END CHAPTER 4: AS-PCG
+# END CHAPTER 3: AS-PCG
 # ============================================================
-
 
 # ============================================================
 # SHOW ALL FIGURES
 # ============================================================
 
 plt.show()
+
