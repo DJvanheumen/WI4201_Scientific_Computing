@@ -53,24 +53,23 @@ def discretization_function(N):
 
     # construct I_hat
     Ih_hat = sp.lil_matrix((N+1, N+1))
-    Ih_hat[1:N, 1:N] = sp.eye(N-1)
+    Ih_hat[1:N, 1:N] = sp.eye(N-1, format='csr')
     Ih_hat = Ih_hat.tocsr()
 
     # construct main diagonal from Kronecker product
     J_diag = np.zeros(N+1)
     J_diag[1:N] = 1
-    J_hat = sp.diags(J_diag, offsets=0,shape=(N+1, N+1),format='csr')
+    J = sp.diags(J_diag, offsets=0,shape=(N+1, N+1),format='csr')
 
     # construct lower and upper diagonals
-    H_hat = sp.diags([np.ones(N), np.ones(N)],offsets=[-1, 1],shape=(N+1, N+1),format='lil')
-    H_hat[0, 1] = 0
-    H_hat[1, 0] = 0
-    H_hat[N, N-1] = 0
-    H_hat[N-1, N] = 0
-    H_hat = H_hat.tocsr()
+    diag_tmp = np.ones(N)
+    diag_tmp[0] = 0
+    diag_tmp[-1] = 0
+    H = sp.diags([diag_tmp, diag_tmp], offsets=[-1, 1], shape=(N+1, N+1), format='csr')
 
     # construct Ah
-    Ah = (sp.kron(sp.eye(N+1) - J_hat, sp.eye(N+1)) + sp.kron(J_hat, Th_hat) / h**2 - sp.kron(H_hat, Ih_hat) / h**2).tocsr()
+    I = sp.eye(N+1, format='csr')
+    Ah = (sp.kron(I - J, I) + sp.kron(J, Th_hat) / h**2 - sp.kron(H, Ih_hat) / h**2).tocsr()
 
     # initial guess
     u0 = np.zeros(n)
@@ -91,7 +90,6 @@ def GaussSeidelSplitting_function(Ah, n, omega):
     # construct SSOR matrices
     M1 = D / omega - E
     N1 = (1-omega) / omega * D + F
-
     M2 = D / omega - F
     N2 = (1-omega) / omega * D + E
 
@@ -106,10 +104,8 @@ def SSOR_function(Ah, M1, M2, N1, N2, fh, u0, tol, maxit):
     # initialization
     k = 0
     u = u0.copy()
-
     relres = np.linalg.norm(fh - Ah @ u, 2) / np.linalg.norm(fh, 2)
     relres_vec = []
-
     # factorize matrices once
     M1_solver = spla.splu(M1.tocsc())
     M2_solver = spla.splu(M2.tocsc())
@@ -145,10 +141,8 @@ def CG_function(Ah, fh, u0, tol, maxit):
     u = u0.copy()
     r = fh - Ah @ u
     p = r.copy()
-
     rTr_old = r @ r
     rel_res = np.linalg.norm(r) / np.linalg.norm(fh)
-
     res_vec = np.zeros(maxit + 1)
     res_vec[0] = rel_res
 
