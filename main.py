@@ -1,51 +1,33 @@
-"""Sample script: solve -Laplace(u) = f on the unit square with a 5-point stencil.
+"""WI4201 Assignment 2: run all experiments, print the results and show the figures.
 
-Reference solution u = sin(xy), as in Matlab code/SCRIPT1_Discretization.m.
+Usage: python main.py
+Run a single part with e.g. python -m solvers.ssor (uses the values in that module's __main__ block)
 """
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.sparse as sp
-import scipy.sparse.linalg as spla
 
+from solvers import additive_schwarz, cg, discretization, ssor
 
-def laplacian_2d(N):
-    """Return the 2D Laplacian on the (N-1)^2 interior grid points."""
-    h = 1 / N
-    T = sp.diags([-1.0, 2.0, -1.0], [-1, 0, 1], shape=(N - 1, N - 1)) / h**2
-    I = sp.identity(N - 1)
-    return (sp.kron(I, T) + sp.kron(T, I)).tocsr()
+# global parameter setting
+tol = 1e-10            # stopping criterion ||r^k||_2 / ||f^h||_2 <= tol, eq. (4)
+maxit = 10000          # maximum number of iterations
+omega = 1.5            # SSOR relaxation parameter
+Nruns_CPUtimes = 1     # CPU time is the median over this many runs
 
+# scenarios
+q_scenarios = np.arange(2, 9)              # discretization: N = 2^q
+N_scenarios = np.array([20, 40, 60, 80])   # SSOR, CG and SSOR-PCG
+Nasympt = 5                                # SSOR: number of final iterations for the residual ratios
+N_AS = N_scenarios[-1]                     # AS-PCG: mesh size, p should divide N_AS
+p_scenarios = [2, 4, 8, 10]                # AS-PCG: number of subdomains
+l_scenarios = [1, 2, 4, 8]                 # AS-PCG: overlap
+# l_scenarios = [0]  # scenarios without overlap - takes relatively long as it does not converge
 
-def main():
-    N = 32
-    h = 1 / N
-    x = np.linspace(0, 1, N + 1)
-    X, Y = np.meshgrid(x, x, indexing="ij")
+# run all experiments
+discretization.run(q_scenarios)
+ssor.run(N_scenarios, omega, tol, maxit, Nasympt, Nruns_CPUtimes)
+cg.run(N_scenarios, omega, tol, maxit, Nruns_CPUtimes)
+additive_schwarz.run(N_AS, p_scenarios, l_scenarios, tol, maxit, Nruns_CPUtimes)
 
-    u_ref = np.sin(X * Y)
-    f = (X**2 + Y**2) * np.sin(X * Y)
-
-    # Move the known boundary values to the right-hand side.
-    rhs = f[1:-1, 1:-1].copy()
-    rhs[0, :] += u_ref[0, 1:-1] / h**2
-    rhs[-1, :] += u_ref[-1, 1:-1] / h**2
-    rhs[:, 0] += u_ref[1:-1, 0] / h**2
-    rhs[:, -1] += u_ref[1:-1, -1] / h**2
-
-    A = laplacian_2d(N)
-    u = u_ref.copy()
-    u[1:-1, 1:-1] = spla.spsolve(A, rhs.ravel()).reshape(N - 1, N - 1)
-
-    print(f"N = {N}, max error = {np.abs(u - u_ref).max():.3e}")
-
-    plt.contourf(X, Y, u, levels=20)
-    plt.colorbar(label="u")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.title("Numerical solution")
-    plt.show()
-
-
-if __name__ == "__main__":
-    main()
+plt.show()

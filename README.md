@@ -63,14 +63,42 @@ This installs:
 
 If you add a package, add it to `requirements.txt` as well, so everyone gets the same environment.
 
-### 4. Check the installation
+### 4. Run the code
 
 ```bash
 python main.py
 ```
 
-[main.py](main.py) is a sample script you can edit. It solves the Poisson problem on the unit square for $u = \sin(xy)$, prints the maximum error and plots the solution.
+This runs all experiments of the assignment in order, prints the results (iteration counts, CPU times, residual ratios, convergence orders) and opens the figures. With the default settings it takes a few seconds.
+
+## Code structure
+
+The code solves the Poisson problem $-\Delta u = f$ on the unit square with exact solution $u = \sin(xy)$, using the five-point stencil. It compares SSOR, CG, SSOR-preconditioned CG and CG with a one-level additive Schwarz (AS) preconditioner.
+
+```
+main.py                      parameters and the calls to each experiment
+solvers/
+  discretization.py          matrix Ah and right-hand side fh; discretization error
+  ssor.py                    SSOR iteration and SSOR preconditioner
+  cg.py                      CG and preconditioned CG
+  additive_schwarz.py        additive Schwarz preconditioner
+  utils.py                   timing and plot helpers
+```
+
+### Parameters
+
+All parameters are set at the top of [main.py](main.py): the tolerance, the maximum number of iterations, $\omega$, the number of timing runs, and the values of $N$, $p$ and $l$ for each experiment. `main.py` passes them to the `run()` function of each module.
+
+### Running one part
+
+Each module in [solvers/](solvers/) has a `run()` function for its part of the assignment. To run only that part, use
+
+```bash
+python -m solvers.ssor
+```
+
+(or `solvers.discretization`, `solvers.cg`, `solvers.additive_schwarz`). This uses the parameter values in the `if __name__ == "__main__":` block at the bottom of that module, so you can change them while working on that part without touching `main.py`. The results for the report come from `main.py`.
 
 ## MATLAB code
 
-The original MATLAB scripts are in [Matlab code/](Matlab%20code/). To run them, open MATLAB in that folder and run `SCRIPT1_Discretization` (or one of the other scripts).
+The original MATLAB scripts are in [matlab/](matlab/). To run them, open MATLAB in that folder and run `SCRIPT1_Discretization` (or one of the other scripts).
