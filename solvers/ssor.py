@@ -1,11 +1,12 @@
 """SSOR iteration (eq. 33-34) and SSOR preconditioner (eq. 51)."""
 
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from .utils import plot_convergence_history, plot_iterations_and_time, timed
+from tools.plotting import plot_convergence_history, plot_iterations_and_time
+from tools.timing import timed
+
 from .discretization import discretization_function
 
 
@@ -41,7 +42,7 @@ def SSOR_function(Ah, M1, M2, N1, N2, fh, u0, tol, maxit):
     norm_fh = np.linalg.norm(fh)
 
     relres = np.linalg.norm(fh - Ah @ u) / norm_fh
-    relres_vec = []
+    relres_vec = [relres]
 
     # factorize matrices once
     M1_solve = triangular_solver(M1)
@@ -75,10 +76,11 @@ def SSOR_preconditioner(D, M1, M2, omega):
     return lambda r: M2_solve(D_scaled * M1_solve(r))
 
 
-def run(N_scenarios, omega, tol, maxit, Nasympt, Nruns_CPUtimes):
+def run(N_scenarios, omega, tol, maxit, Nasympt, Nruns_CPUtimes, figures_dir):
     """Implementation 3-5: SSOR convergence history, asymptotic convergence and computational cost.
 
     Nasympt is the number of final iterations used for the residual ratios of eq. (74).
+    Returns {'SSOR': {'K': ..., 'time': ..., 'setup': ...}} per N, for the time scaling figure in main.py.
     """
     print("\n2. SSOR")
 
@@ -88,12 +90,14 @@ def run(N_scenarios, omega, tol, maxit, Nasympt, Nruns_CPUtimes):
     alpha_mat = np.zeros((len(N_scenarios), Nasympt))
     relres_hist = []
     CPUtimes_SSOR = np.zeros(len(N_scenarios))
+    setup_times_SSOR = np.zeros(len(N_scenarios))
     NumberIterations_SSOR = np.zeros(len(N_scenarios), dtype=int)
 
     # loop over scenarios
     for nl, N in enumerate(N_scenarios):
         h, n, u_ref, fh, Ah, u0 = discretization_function(N)
-        D, _, _, M1, M2, N1, N2 = GaussSeidelSplitting_function(Ah, n, omega)
+        (D, _, _, M1, M2, N1, N2), setup_times_SSOR[nl] = timed(
+            lambda: GaussSeidelSplitting_function(Ah, n, omega), Nruns_CPUtimes)
 
         (uh, k, relres_vec), CPUtimes_SSOR[nl] = timed(lambda: SSOR_function(Ah, M1, M2, N1, N2, fh, u0, tol, maxit), Nruns_CPUtimes)
         NumberIterations_SSOR[nl] = k
@@ -104,11 +108,7 @@ def run(N_scenarios, omega, tol, maxit, Nasympt, Nruns_CPUtimes):
         for jl in range(Nasympt):
             alpha_mat[il, jl] = relres_hist[il][-jl-1] / relres_hist[il][-jl-2]
 
-    # plots and output
-    plot_convergence_history(relres_hist, n_scenarios, tol, 'SSOR convergence history')
-    plot_iterations_and_time(n_scenarios, NumberIterations_SSOR, 'n', '# SSOR iterations',
-                             n_scenarios**2, CPUtimes_SSOR, 'n^2', 'SSOR CPU time (s)')
-
+    # output
     print("\nalpha_mat:")
     print(alpha_mat)
     print("\nNumberIterations_SSOR:")
@@ -116,7 +116,15 @@ def run(N_scenarios, omega, tol, maxit, Nasympt, Nruns_CPUtimes):
     print("\nCPUtimes_SSOR:")
     print(CPUtimes_SSOR)
 
+    # figures: K = O(n) and CPU time = O(n^2), eq. (37)
+    plot_convergence_history(relres_hist, n_scenarios, tol, 'SSOR', figures_dir, 'ssor_convergence')
+    plot_iterations_and_time(n_scenarios, NumberIterations_SSOR, r'$n$',
+                             n_scenarios**2, CPUtimes_SSOR, r'$n^2$',
+                             'SSOR', figures_dir, 'ssor_cost')
+
+    return {'SSOR': {'K': NumberIterations_SSOR, 'time': CPUtimes_SSOR, 'setup': setup_times_SSOR}}
+
 
 if __name__ == "__main__":
-    run(N_scenarios=np.array([20, 40, 60, 80]), omega=1.5, tol=1e-10, maxit=10000, Nasympt=5, Nruns_CPUtimes=1)
-    plt.show()
+    run(N_scenarios=np.array([40, 80, 120, 160, 200]), omega=1.5, tol=1e-10, maxit=20000, Nasympt=5, Nruns_CPUtimes=1,
+        figures_dir="figures")

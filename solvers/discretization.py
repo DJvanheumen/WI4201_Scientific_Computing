@@ -1,9 +1,10 @@
 """Five-point discretization of -Laplace(u) = f with u_ex = sin(xy), boundary nodes kept as unknowns."""
 
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
+
+from tools.plotting import plot_discretization_error
 
 
 def discretization_function(N):
@@ -65,7 +66,7 @@ def discretization_function(N):
     return h, n, u_ref, fh, Ah, u0
 
 
-def run(q_scenarios):
+def run(q_scenarios, figures_dir):
     """Implementation 2: discretization error for N = 2^q, solved with a sparse direct solver."""
     print("\n1. Discretization")
 
@@ -79,26 +80,16 @@ def run(q_scenarios):
         u_h = spla.splu(Ah.tocsc()).solve(fh).reshape((N+1, N+1), order='F')
         error_scenarios[il] = np.max(np.abs(u_h - u_ref))
 
-    # plot convergence
+    # estimate order of convergence, eq. (73) with h_A the finest mesh
     xvals = 2.0**(-q_scenarios)
     yvals = error_scenarios
-
-    plt.figure()
-    plt.loglog(xvals, yvals, 'o-', linewidth=2, markersize=10, markerfacecolor='k', color='k')
-    plt.xlabel(r'$h$', fontsize=32)
-    plt.ylabel(r'$\|\mathbf{u}^h-\mathbf{u}^h_{\mathrm{ex}}\|_\infty$', fontsize=24)
-    plt.title('Discretization error', fontsize=32)
-    plt.xticks(fontsize=24)
-    plt.yticks(fontsize=24)
-    plt.grid(True)
-
-    # estimate order of convergence, eq. (73) with h_A the finest mesh
     beta_estimates = np.log(yvals[-1] / yvals[:-1]) / np.log(xvals[-1] / xvals[:-1])
 
     print("\nbeta_estimates:")
     print(beta_estimates)
 
+    plot_discretization_error(xvals, yvals, figures_dir)
+
 
 if __name__ == "__main__":
-    run(q_scenarios=np.arange(2, 9))
-    plt.show()
+    run(q_scenarios=np.arange(2, 9), figures_dir="figures")
