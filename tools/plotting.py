@@ -62,6 +62,31 @@ def plot_convergence_history(hist, n_scenarios, tol, method, figures_dir, name):
     save(fig, figures_dir, name)
 
 
+def plot_two_convergence_histories(hist1, hist2, n_scenarios, tol, method1, method2, figures_dir, name):
+    """Side-by-side convergence histories for two methods, one line per problem size n."""
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10.0, 3.8), sharey=True)
+
+    for res_vec, n in zip(hist1, n_scenarios):
+        ax1.semilogy(np.arange(len(res_vec)), res_vec, label=f"$n = {n}$")
+
+    for res_vec, n in zip(hist2, n_scenarios):
+        ax2.semilogy(np.arange(len(res_vec)), res_vec, label=f"$n = {n}$")
+
+    ax1.set_title(f"{method1} convergence history")
+    ax2.set_title(f"{method2} convergence history")
+
+    for ax in (ax1, ax2):
+        ax.axhline(tol, color="k", linestyle="--", linewidth=1, label="tolerance")
+        ax.set_xlabel(r"iteration $k$")
+        ax.legend()
+
+    ax1.set_ylabel(r"$\|\mathbf{r}^k\|_2 \, / \, \|\mathbf{f}^h\|_2$")
+
+    fig.tight_layout()
+    save(fig, figures_dir, name)   
+
+
 def plot_iterations_and_time(x_iter, iterations, x_iter_label, x_time, cpu_times, x_time_label,
                              method, figures_dir, name):
     """Iterations K and CPU time against the predicted scaling, each with a linear least-squares fit.
