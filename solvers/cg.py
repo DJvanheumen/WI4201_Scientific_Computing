@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from tools.plotting import plot_convergence_history, plot_iterations_and_time
+from tools.plotting import plot_convergence_history, plot_two_convergence_histories, plot_iterations_and_time
 from tools.timing import timed
 
 from .discretization import discretization_function
@@ -102,12 +102,12 @@ def run(N_scenarios, omega, tol, maxit, Nruns_CPUtimes, figures_dir):
     xdat1 = np.sqrt(n_scenarios) * np.log(n_scenarios)
     xdat2 = n_scenarios**(3/2) * np.log(n_scenarios)
 
-    plot_convergence_history(relres_CG_hist, n_scenarios, tol, 'CG', figures_dir, 'cg_convergence')
+    # plot_convergence_history(relres_CG_hist, n_scenarios, tol, 'CG', figures_dir, 'cg_convergence')
+    # plot_convergence_history(relres_PCG_hist, n_scenarios, tol, 'SSOR-PCG', figures_dir, 'ssor_pcg_convergence')
+    plot_two_convergence_histories(relres_CG_hist, relres_PCG_hist, n_scenarios, tol, 'CG', 'SSOR-PCG', figures_dir, 'cg_pcg_convergence') # both CG and SSOR-PCG are plotted together for the report 
     plot_iterations_and_time(xdat1, NumberIterations_CG, r'$n^{1/2} \log n$',
                              xdat2, CPUtimes_CG, r'$n^{3/2} \log n$',
                              'CG', figures_dir, 'cg_cost')
-
-    plot_convergence_history(relres_PCG_hist, n_scenarios, tol, 'SSOR-PCG', figures_dir, 'ssor_pcg_convergence')
     plot_iterations_and_time(xdat1, NumberIterations_PCG, r'$n^{1/2} \log n$',
                              xdat2, CPUtimes_PCG, r'$n^{3/2} \log n$',
                              'SSOR-PCG', figures_dir, 'ssor_pcg_cost')
